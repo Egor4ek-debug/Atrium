@@ -1,0 +1,10 @@
+flask==2.2.5
+werkzeug==2.2.3
+flask-sqlalchemy==3.0.3
+sqlalchemy==2.0.25
+flask-login==0.6.2
+flask-admin==1.6.1
+wtforms==3.0.1
+python-telegram-bot==20.3
+python-dotenv==0.19.0
+requests==2.31.0

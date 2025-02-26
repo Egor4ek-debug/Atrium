@@ -1,0 +1,30 @@
+{% extends 'admin/master.html' %}
+{% block body %}
+<h3>Статистика</h3>
+<table class="table">
+    <tr>
+        <th>Всего задач</th>
+        <td>{{ total_tasks }}</td>
+    </tr>
+    <tr>
+        <th>Выполнено</th>
+        <td>{{ completed_tasks }}</td>
+    </tr>
+</table>
+
+<h4>По сотрудникам</h4>
+<table class="table">
+    <tr>
+        <th>Сотрудник</th>
+        <th>Всего</th>
+        <th>Выполнено</th>
+    </tr>
+    {% for worker in workers_stats %}
+    <tr>
+        <td>{{ worker.full_name }}</td>
+        <td>{{ worker.total }}</td>
+        <td>{{ worker.completed }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}
