@@ -1,11 +1,11 @@
-from app import db
-from models import User, Task
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_login import current_user
 from wtforms import SelectField
 import requests
 from config import Config
+from app import db
+from models import User, Task
 
 
 class UserAdminView(ModelView):
