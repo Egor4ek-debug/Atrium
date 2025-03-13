@@ -1,10 +1,11 @@
 flask==2.2.5
 werkzeug==2.2.3
-flask-sqlalchemy==3.0.3
-sqlalchemy==2.0.25
+flask-sqlalchemy==3.0.5
 flask-login==0.6.2
 flask-admin==1.6.1
-wtforms==3.0.1
-python-telegram-bot==20.3
-python-dotenv==0.19.0
+flask-migrate==4.0.5
+psycopg2-binary==2.9.9
+python-telegram-bot==20.6
+python-dotenv==1.0.0
+alembic==1.12.0
 requests==2.31.0

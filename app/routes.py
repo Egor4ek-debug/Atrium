@@ -1,9 +1,15 @@
 from flask import render_template, request, redirect, url_for, abort
 from flask_login import login_user, current_user, login_required
 from app import db
-from models import User, Task
+from app.models import User, Task
+
 
 def init_routes(app):
+    @app.route('/admin')
+    @login_required
+    def admin_protected():
+        return redirect(url_for('admin.index'))
+
     @app.route('/')
     def index():
         return redirect(url_for('login'))
@@ -18,7 +24,7 @@ def init_routes(app):
         if user:
             login_user(user)
             return redirect(url_for('admin.index'))
-        return "Access denied", 403
+        return "Доступ запрещен", 403
 
     @app.route('/stats')
     @login_required
