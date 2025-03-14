@@ -1,14 +1,9 @@
 import asyncio
 import threading
-from datetime import datetime
 
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from telegram.ext import (
-    Application,
-    MessageHandler,
-    CallbackContext,
-    filters
-)
+from telegram.ext import Application, MessageHandler, filters, CallbackContext
+from telegram.helpers import escape_markdown
 
 from app import db
 from app.models import User, Task
@@ -25,103 +20,112 @@ def setup_telegram_bot(app, token):
             with app.app_context():
                 user_id = update.message.from_user.id
 
-                # Обработка контакта
-                if update.message.contact:
-                    phone = update.message.contact.phone_number
-                    if not phone.startswith('+'):
-                        phone = f'+{phone}'
-
-                    user = User.query.filter_by(phone_number=phone).first()
-                    if user:
-                        user.telegram_id = user_id
-                        db.session.commit()
-                        await update.message.reply_text("✅ Аккаунт успешно привязан!")
-                    else:
-                        await update.message.reply_text(f"❌ Пользователь с номером {phone} не найден")
-
-                # Команда /start
-                elif update.message.text == '/start':
+                # Приветственное сообщение
+                if update.message.text == '/start':
+                    # Формируем текст приветствия
                     welcome_text = (
-                        "👋 Добро пожаловать в Task Manager Bot!\n\n"
-                        "📌 Для работы с системой:\n"
-                        "1. Привяжите телефон через кнопку ниже\n"
-                        "2. Ожидайте назначения задач\n"
-                        "3. Обновляйте статусы через кнопки\n\n"
-                        "⚙️ Доступные команды:\n"
-                        "/мои_задачи - список ваших задач"
+                        "👋 *Добро пожаловать в Task Manager Bot!*\n\n"
+                        "⚙️ **Назначение:**\n"
+                        "1. Получайте задачи от администратора\n"
+                        "2. Обновляйте статусы через кнопки\n"
+                        "3. Указывайте причины при проблемах\n\n"
+                        "📌 **Команды:**\n"
+                        "/мои\_задачи - список активных задач"  # Экранируем нижнее подчеркивание
                     )
 
-                    contact_btn = KeyboardButton("📲 Привязать аккаунт", request_contact=True)
-                    markup = ReplyKeyboardMarkup(
-                        [[contact_btn], ["/мои_задачи"]],
-                        resize_keyboard=True
-                    )
-                    await update.message.reply_text(welcome_text, reply_markup=markup)
+                    # Экранируем специальные символы для MarkdownV2
+                    escaped_text = escape_markdown(welcome_text, version=2)
 
-                # Показать задачи
+                    user = User.query.filter_by(telegram_id=user_id).first()
+
+                    if user and user.telegram_id:
+                        await update.message.reply_text(
+                            escaped_text,
+                            parse_mode='MarkdownV2',
+                            reply_markup=ReplyKeyboardMarkup([["/мои_задачи"]], resize_keyboard=True)
+                        )
+                    else:
+                        contact_btn = KeyboardButton("📲 Привязать аккаунт", request_contact=True)
+                        await update.message.reply_text(
+                            escaped_text,
+                            parse_mode='MarkdownV2',
+                            reply_markup=ReplyKeyboardMarkup([[contact_btn]], resize_keyboard=True)
+                        )
+
+                # Обработка задач
                 elif update.message.text == '/мои_задачи':
                     user = User.query.filter_by(telegram_id=user_id).first()
                     if not user:
+                        await update.message.reply_text("❌ Аккаунт не привязан!")
                         return
 
-                    tasks = Task.query.filter_by(worker_id=user.id).all()
+                    tasks = Task.query.filter(
+                        Task.worker_id == user.id,
+                        Task.status.in_(['new', 'in_progress'])
+                    ).all()
+
+                    for task in tasks:
+                        if task.status == 'new':
+                            task.status = 'in_progress'
+                            db.session.commit()
+
                     markup = ReplyKeyboardMarkup(
                         [
-                            ['✅ Готово', '🚫 Не выполнено'],
-                            ['⛔ Не смогу'],
+                            ['✅ Готово', '🚫 Проблемы'],
+                            ['⛔ Отказаться'],
                             ['🔄 Обновить']
                         ],
                         resize_keyboard=True
                     )
 
-                    if not tasks:
-                        await update.message.reply_text("📭 Нет активных задач", reply_markup=markup)
-                        return
-
-                    response = ["📌 Ваши задачи:"]
+                    response = ["📌 *Ваши задачи:*"]
                     for task in tasks:
-                        status = {
-                            'new': '🆕 Новая',
-                            'in_progress': '🏗 В работе',
-                            'done': '✅ Выполнена',
-                            'canceled': '🚫 Отменена',
-                            'rejected': '⛔ Отклонена'
-                        }.get(task.status, task.status)
+                        status_emoji = {
+                            'new': '🆕',
+                            'in_progress': '🏗',
+                            'done': '✅',
+                            'canceled': '🚫',
+                            'rejected': '⛔'
+                        }.get(task.status, '')
 
-                        response.append(
-                            f"• {task.description}\n"
-                            f"📍 Адрес: {task.address}\n"
-                            f"⏰ Срок: {task.due_time.strftime('%d.%m.%Y %H:%M')}\n"
-                            f"📌 Статус: {status}"
+                        # Экранирование Markdown-символов
+                        description = escape_markdown(task.description, version=2)
+                        address = escape_markdown(task.address, version=2)
+                        due_time = escape_markdown(task.due_time.strftime('%d.%m.%Y %H:%M'), version=2)
+
+                        task_info = (
+                            f"{status_emoji} *{description}*\n"
+                            f"📍 Адрес: {address}\n"
+                            f"⏰ Срок: {due_time}"
                         )
+                        response.append(task_info)
 
-                    await update.message.reply_text("\n\n".join(response), reply_markup=markup)
-
+                    await update.message.reply_text(
+                        "\n\n".join(response),
+                        parse_mode='MarkdownV2',  # Указание версии Markdown
+                        reply_markup=markup
+                    )
                 # Обработка статусов
-                elif update.message.text in ['✅ Готово', '🚫 Не выполнено', '⛔ Не смогу']:
+                elif update.message.text in ['✅ Готово', '🚫 Проблемы', '⛔ Отказаться']:
                     user = User.query.filter_by(telegram_id=user_id).first()
-                    if not user:
-                        return
-
                     task = Task.query.filter(
                         Task.worker_id == user.id,
                         Task.status.in_(['new', 'in_progress'])
                     ).first()
 
                     if not task:
-                        await update.message.reply_text("❌ Нет задач для обновления")
+                        await update.message.reply_text("❌ Нет активных задач")
                         return
 
                     if update.message.text == '✅ Готово':
                         task.status = 'done'
-                        task.completed_at = datetime.utcnow()
-                        reply = "✅ Задача отмечена выполненной"
-                    elif update.message.text == '🚫 Не выполнено':
+                        reply = "✅ Задача выполнена!"
+                    elif update.message.text == '🚫 Проблемы':
                         task.status = 'canceled'
-                        reply = "🚫 Укажите причину через пробел"
-                    elif update.message.text == '⛔ Не смогу':
+                        reply = "🚫 Укажите причину (напишите текст после команды)"
+                    elif update.message.text == '⛔ Отказаться':
                         task.status = 'rejected'
-                        reply = "⛔ Укажите причину через пробел"
+                        reply = "⛔ Укажите причину отказа (напишите текст после команды)"
 
                     db.session.commit()
                     await update.message.reply_text(reply, reply_markup=ReplyKeyboardRemove())

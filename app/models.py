@@ -15,14 +15,14 @@ class User(UserMixin, db.Model):
     tasks = db.relationship('Task', back_populates='worker', lazy=True)
 
     def __repr__(self):
-        return self.full_name
+        return self.full_name  # Важно для отображения в выпадающем списке
 
 class Task(db.Model):
     __tablename__ = 'tasks'
     id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    description = db.Column(db.Text)
-    address = db.Column(db.String(200))
-    due_time = db.Column(db.DateTime)
+    description = db.Column(db.Text, nullable=False)
+    address = db.Column(db.String(200), nullable=False)
+    due_time = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(50), default='new')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)

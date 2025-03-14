@@ -1,72 +1,64 @@
+from flask import current_app
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
 from flask_login import current_user
-from wtforms import SelectField
+from wtforms import SelectField, validators
+from sqlalchemy.orm import lazyload
 from app import db
-from .models import User, Task
-from .config import Config
+from app.models import User, Task
 import requests
+
 
 class SecureModelView(ModelView):
     def is_accessible(self):
         return current_user.is_authenticated and current_user.role == 'admin'
 
-    def inaccessible_callback(self, name, **kwargs):
-        from flask import redirect, url_for
-        return redirect(url_for('login'))
-
-
-class UserAdminView(SecureModelView):
-    column_list = ['full_name', 'phone_number', 'role']
-    form_columns = ['full_name', 'phone_number', 'role']
-    form_overrides = {'role': SelectField}
-    form_args = {
-        'role': {
-            'choices': [('admin', 'Admin'), ('worker', 'Worker')],
-            'coerce': str
-        }
-    }
-
 
 class TaskAdminView(SecureModelView):
-
-    column_list = ['description', 'address', 'due_time', 'worker', 'status']
+    column_list = ['description', 'address', 'due_time', 'worker', 'status', 'reason']
     form_columns = ['description', 'address', 'due_time', 'worker', 'status']
-    form_ajax_refs = {
+
+    # Фильтрация только работников
+    def get_query(self):
+        return super().get_query().join(User).filter(User.role == 'worker')
+
+    # Выбор сотрудника по имени
+    form_args = {
         'worker': {
-            'fields': ['full_name'],
-            'page_size': 10
-        }
+            'query_factory': lambda: User.query.filter_by(role='worker'),
+            'get_label': 'full_name'
+        },
+        'description': {'validators': [validators.InputRequired()]},
+        'address': {'validators': [validators.InputRequired()]},
+        'due_time': {'validators': [validators.InputRequired()]}
     }
 
     def on_model_change(self, form, model, is_created):
-        if is_created:
-            self.send_task_notification(model)
+        if is_created and model.worker.telegram_id:
+            self.send_telegram_notification(model)
         return super().on_model_change(form, model, is_created)
 
-    def send_task_notification(self, task):
+    def send_telegram_notification(self, task):
         try:
-            from .config import Config  # Локальный импорт
-            if task.worker and task.worker.telegram_id:
-                message = (
-                    "🎯 *Новая задача!*\n"
-                    f"📝 Описание: {task.description}\n"
-                    f"📍 Адрес: {task.address}\n"
-                    f"⏰ Срок: {task.due_time.strftime('%d.%m.%Y %H:%M')}"
-                )
-
-                url = f"https://api.telegram.org/bot{Config.TELEGRAM_TOKEN}/sendMessage"
-                response = requests.post(url, json={
+            message = (
+                "🎯 *Новая задача!*\n"
+                f"📝 {task.description}\n"
+                f"📍 {task.address}\n"
+                f"⏰ {task.due_time.strftime('%d.%m.%Y %H:%M')}"
+            )
+            requests.post(
+                f"https://api.telegram.org/bot{current_app.config['TELEGRAM_TOKEN']}/sendMessage",
+                json={
                     'chat_id': task.worker.telegram_id,
                     'text': message,
                     'parse_mode': 'Markdown'
-                })
-                response.raise_for_status()  # Проверка ошибок HTTP
+                }
+            )
         except Exception as e:
-            print(f"Ошибка отправки уведомления: {str(e)}")
+            current_app.logger.error(f"Ошибка отправки уведомления: {e}")
 
 
 def init_admin(app):
-    admin = Admin(app, name='Task Manager', template_mode='bootstrap3')
-    admin.add_view(UserAdminView(User, db.session))
-    admin.add_view(TaskAdminView(Task, db.session))
+    admin = Admin(app, name='Task Manager', template_mode='bootstrap3', url='/admin')
+    admin.add_view(ModelView(User, db.session, name='Сотрудники'))
+    admin.add_view(TaskAdminView(Task, db.session, name='Задачи'))
