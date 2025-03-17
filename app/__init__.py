@@ -1,4 +1,5 @@
 import uuid
+
 from flask import Flask
 from flask_login import LoginManager
 from flask_migrate import Migrate
@@ -7,6 +8,7 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 login_manager = LoginManager()
 migrate = Migrate()
+
 
 def create_app():
     app = Flask(__name__, template_folder='templates')
@@ -20,7 +22,7 @@ def create_app():
         from .models import User, Task
         db.create_all()
 
-        # Создание администратора
+        # Создание администратора по умолчанию
         try:
             admin_phone = '+79524603494'
             if not User.query.filter_by(phone_number=admin_phone).first():
@@ -35,7 +37,6 @@ def create_app():
         except Exception as e:
             app.logger.error(f"Ошибка создания администратора: {e}")
 
-        # Инициализация компонентов
         from .routes import init_routes
         from .admin import init_admin
         from .telegram_handlers import setup_telegram_bot
@@ -43,9 +44,8 @@ def create_app():
         init_routes(app)
         init_admin(app)
 
-        # Запуск бота
         if app.config.get('TELEGRAM_TOKEN'):
-            setup_telegram_bot(app, app.config['TELEGRAM_TOKEN'])
+            setup_telegram_bot(app, app.config.get('TELEGRAM_TOKEN'))
 
     @login_manager.user_loader
     def load_user(user_id):

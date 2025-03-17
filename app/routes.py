@@ -1,24 +1,27 @@
-from flask import render_template, request, redirect, url_for, abort
-from flask_login import login_user, current_user, login_required
-from app import db
-from app.models import User, Task
+from flask import render_template, redirect, url_for, request, flash
+from flask_login import current_user, login_user
+
+from app.models import User
 
 
 def init_routes(app):
-    @app.route('/admin/stats')
-    @login_required
-    def admin_stats():
-        if current_user.role != 'admin':
-            abort(403)
+    @app.route('/')
+    def index():
+        return redirect(url_for('login'))
 
-        # Статистика с outerjoin для сотрудников без задач
-        workers_stats = db.session.query(
-            User.full_name,
-            db.func.count(Task.id).label('total'),
-            db.func.sum(db.case((Task.status == 'done', 1), else_=0)).label('completed')
-        ).outerjoin(Task, User.id == Task.worker_id).group_by(User.id).all()
+    @app.route('/login', methods=['GET', 'POST'])
+    def login():
+        if current_user.is_authenticated:
+            return redirect(url_for('admin.index'))
 
-        return render_template('admin/stats.html',
-                               total_tasks=Task.query.count(),
-                               completed_tasks=Task.query.filter_by(status='done').count(),
-                               workers_stats=workers_stats)
+        if request.method == 'POST':
+            phone = request.form.get('phone')
+            user = User.query.filter_by(phone_number=phone).first()
+
+            if user and user.role == 'admin':
+                login_user(user)
+                return redirect(url_for('admin.index'))
+            else:
+                flash('Неверный номер телефона или недостаточно прав', 'danger')
+
+        return render_template('login.html')

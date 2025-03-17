@@ -20,27 +20,19 @@
         </div>
     </div>
 
-    <h4 class="mt-4">По сотрудникам</h4>
-    <table class="table table-bordered">
-        <thead class="thead-dark">
-            <tr>
-                <th>Сотрудник</th>
-                <th>Всего задач</th>
-                <th>Выполнено</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for worker in workers_stats %}
-            <tr>
-                <td>{{ worker.full_name }}</td>
-                <td>{{ worker.total }}</td>
-                <td>{{ worker.completed }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="3">Нет данных</td>
-            </tr>
-            {% endfor %}
-        </tbody>
+    <h4 class="mt-4">Статистика по сотрудникам</h4>
+    <table class="table">
+        <tr>
+            <th>Сотрудник</th>
+            <th>Всего задач</th>
+            <th>Выполнено</th>
+        </tr>
+        {% for worker in workers_stats %}
+        <tr>
+            <td>{{ worker.full_name }}</td>
+            <td>{{ worker.total }}</td>
+            <td>{{ worker.completed }}</td>
+        </tr>
+        {% endfor %}
     </table>
 {% endblock %}
